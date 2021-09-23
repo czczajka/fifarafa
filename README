@@ -1,0 +1,6 @@
+* Data needed for script can be downloaded from:
+    * https://www.kaggle.com/karangadiya/fifa19/download
+
+* Data after unp;acking should be available in directory data/
+    * data/data.csv
+

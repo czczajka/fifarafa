@@ -1,0 +1,240 @@
+#!/usr/bin/env python
+# coding: utf-8
+
+# In[31]:
+
+
+import pandas as pd
+import numpy as np
+
+import matplotlib.pyplot as plt
+import plotly.graph_objects as go
+
+import plotly.express as px
+from iso3166 import countries
+
+
+# In[32]:
+
+
+# Read data
+data = pd.read_csv("data/data.csv")
+
+# Set dislay options
+pd.set_option('display.max_columns', None)
+
+
+# In[33]:
+
+
+## Prepare Value and Wage to float conversion
+# Separete currency from the value
+data['Currency'] = data['Value'].str[0:1]
+data['Value'] = data['Value'].str[1:]
+
+# Remove M or K
+data['Value metric'] = data['Value'].str[-1:]
+data['Value'] = data['Value'].str[:-1]
+
+#Remove K
+data['Wage'] = data['Wage'].str[1:-1]
+
+
+# In[34]:
+
+
+## Convert string to float
+# Way 1
+data["Value"] = pd.to_numeric(data["Value"])
+
+# Value multiply by metric (with factorize)
+list_factor=[1000000, 0, 1000]
+factorized = data['Value metric'].factorize()[0]
+list_factor_array = np.array(list_factor)
+factors  = list_factor_array[factorized]
+data['Value'] *= factors
+
+### The same for Wage, here is more simple because is always K as factor
+data['Wage'] = pd.to_numeric(data['Wage'])
+data['Wage'] *= 1000
+
+
+# In[35]:
+
+
+#### The total price of top 10 players and bottom 10 players comparison
+#First way (tricy way)
+top10 = data.head(10)    
+top10price = top10['Value'].sum()
+print("Top 10 value: " + str(top10price))
+
+bottom10 = data.tail(10)    
+bottom10price = bottom10['Value'].sum()
+print("Bottom 10 value: " + str(bottom10price))
+
+
+# In[36]:
+
+
+### Count players by nationallity
+data.groupby(['Nationality']).count().sort_values(by=['Name'], ascending=False)
+
+
+# In[37]:
+
+
+### Overall by nationality (exclude nations with less than 100 players)
+group_nation = data.groupby(['Nationality'])
+grouped_and_filtered = group_nation.filter(lambda x: x['Name'].count() > 100)
+grouped_and_filtered.groupby(['Nationality'])['Overall'].mean().sort_values(ascending=False)
+
+
+# In[38]:
+
+
+### Overall by nationality only for best 100 players (exclude nations with less than 100 players)
+group_nation = data.groupby(['Nationality'])
+
+grouped_and_filtered = group_nation.filter(lambda x: x['Name'].count() > 100)
+nations_best_players = grouped_and_filtered.groupby(['Nationality']).apply(lambda x: x.sort_values(by=['Overall'], ascending=False))
+nations_best_players = nations_best_players.reset_index(drop=True)
+nations_best_players = nations_best_players.groupby(['Nationality']).head(100)
+nations_best_players.groupby(['Nationality'])['Overall'].mean().sort_values(ascending=False)
+
+
+# In[39]:
+
+
+### Average player value by nationallity for best 100 players (exclude nations with less than 100 players)
+players_val = grouped_and_filtered.groupby(['Nationality']).apply(lambda x: x.sort_values(by=['Value'], ascending=False))
+players_val.head(20)
+players_val = players_val.reset_index(drop=True)
+players_val = players_val.groupby(['Nationality']).head(100)
+players_val.groupby(['Nationality'])['Value'].mean().sort_values(ascending=False)
+
+
+# In[40]:
+
+
+### Average player overall by position for best 100 players
+group_position = data.groupby(['Position'])
+group_position = group_position.apply(lambda x: x.sort_values(by=['Overall'], ascending=False))
+group_position = group_position.reset_index(drop=True)
+
+group_position = group_position.groupby('Position').head(100)
+group_position.groupby(['Position'])['Overall'].mean().sort_values(ascending=False)
+
+
+# In[41]:
+
+
+### Average player value by position for best 100 players
+group_position.groupby(['Position'])['Value'].mean().sort_values(ascending=False)
+
+
+# In[42]:
+
+
+### Average player salary by position for best 100 players
+group_position.groupby(['Position'])['Wage'].mean().sort_values(ascending=False)
+
+
+# In[43]:
+
+
+# top 10 clubs, which paid the biggests wage
+top10clubs = data.groupby(by=['Club'])['Wage'].mean().sort_values(ascending=False)
+top10clubs.head(20)
+
+
+# In[44]:
+
+
+### Distribution of players by overall
+min_val = data['Overall'].min()
+max_val = data['Overall'].max()
+val_range = max_val - min_val
+print("Range: " + str(val_range))
+
+# First way to do this with pandas hist function
+# data['Overall'].hist(bins=48)
+
+# second way with matplotlib
+plt.hist(data['Overall'], bins=48, histtype=u'step')
+plt.show()
+
+
+# In[45]:
+
+
+### Pie chart for nationallity - prepare data (show only countries above % limit)
+data_for_pie = data['Nationality'].value_counts().to_frame()
+total = data_for_pie['Nationality'].sum()
+data_for_pie['percentage'] = 100 * data_for_pie['Nationality']/total
+perc_limit = 0.5
+others = data_for_pie[data_for_pie['percentage'] < perc_limit]
+
+
+# In[46]:
+
+
+### Pie chart for nationallity
+data_for_pie = data['Nationality'].value_counts().to_frame()
+total = data_for_pie['Nationality'].sum()
+data_for_pie['percentage'] = 100 * data_for_pie['Nationality']/total
+perc_limit = 1
+### The simplest way to do this
+# data_for_pie.plot.pie(y='percentage', figsize=(5, 5))
+
+others = data_for_pie[data_for_pie['percentage'] < perc_limit]
+print(data_for_pie.shape)
+print(others.shape)
+
+others_sum = others['percentage'].sum()
+others_count = others['percentage'].count()
+data_for_pie.loc["Others"] = [others_count, others_sum]
+
+data_for_pie.tail(10)
+
+data_for_pie = data_for_pie[data_for_pie['percentage'] > perc_limit]
+data_for_pie.tail()
+
+fig1, ax1 = plt.subplots()
+labels = data_for_pie.index
+legend = []
+for index, x in data_for_pie.iterrows():
+    legend.append(index + " " + str(x['percentage']))
+
+ax1.pie(data_for_pie['percentage'], startangle=90, labels=labels, rotatelabels=True)
+plt.show()
+
+
+# In[47]:
+
+
+### Pie chart for nationallity with Plotly
+labels = []
+labels = data_for_pie.index
+values = data_for_pie['percentage']
+
+fig = go.Figure(data=[go.Pie(labels=labels, values=values)])
+fig.show()
+
+
+# In[48]:
+
+
+### Geo visualization
+gbr = [
+    'England', 
+    'Wales', 
+    'Scotland', 
+    'Northern Ireland'
+]
+
+data.loc[data['Nationality'].isin(gbr)] = 'United Kingdom of Great Britain and Northern Ireland'
+states = [country for country, df in data.groupby('Nationality')]
+data1 = data.groupby('Nationality')['Name'].count().to_numpy()
+fig = px.choropleth(locations=states, color=data1, locationmode='country names') 
+fig.show()
+
